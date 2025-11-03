@@ -1,159 +1,247 @@
-import { Feather } from '@expo/vector-icons';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, SafeAreaView, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Animated, { FadeInUp } from 'react-native-reanimated';
-import Card from '../components/Card';
-import CardSkeleton from '../components/CardSkeleton';
-import FilterModal from '../components/FilterModal';
-import FilterTrigger from '../components/FilterTrigger';
-import Header from '../components/Header';
-import OutlineButton from '../components/OutlineButton';
-import { useThemeColor } from '../constants/theme';
-import { db } from '../firebase/config';
-import { styles } from '../theme';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Icon from 'react-native-vector-icons/Feather';
+import { COLORS, FONTS, SIZES } from '../theme';
+
+// Este é o novo Card de Item, definido aqui para simplicidade
+const ItemCard = ({ item, onPress }) => (
+  <View style={styles.card}>
+    <View style={styles.cardTextContainer}>
+      <Text style={styles.cardTitle}>{item.nome}</Text>
+      <Text style={styles.cardInfo}>Patrimônio: {item.patrimonio || 'N/A'}</Text>
+      <Text style={styles.cardInfo}>Setor: {item.setor || 'N/A'}</Text>
+    </View>
+    <TouchableOpacity style={styles.cardButton} onPress={onPress}>
+      <Text style={styles.cardButtonText}>Ver Detalhes</Text>
+    </TouchableOpacity>
+  </View>
+);
 
 const ItensScreen = ({ navigation }) => {
-  const colors = useThemeColor();
-  const [items, setItems] = useState([]);
-  const [filtered, setFiltered] = useState([]);
-  const [queryText, setQueryText] = useState('');
   const [loading, setLoading] = useState(true);
-  // replace selectedEstado with activeFilters and modal visibility
-  const [activeFilters, setActiveFilters] = useState([]);
-  const [filterVisible, setFilterVisible] = useState(false);
-  const [selectedSetor, setSelectedSetor] = useState(null);
-  const estadoOptions = ['Novo', 'Em uso', 'Em manutenção', 'Danificado'];
-  const setorOptions = useMemo(() => {
-    const s = new Set();
-    items.forEach((it) => { if (it.SETOR_RESPONSAVEL) s.add(it.SETOR_RESPONSAVEL); });
-    return Array.from(s).sort();
-  }, [items]);
+  const [items, setItems] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
+  // Busca os itens do Firestore
   useEffect(() => {
-    const q = query(collection(db, 'patrimonio'), orderBy('DESCRICAO'));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const list = [];
-        snap.forEach((d) => list.push({ COD: d.id, ...d.data() }));
-        setItems(list);
-        setFiltered(applyFilter(list, queryText, activeFilters, selectedSetor));
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Erro ao buscar itens: ', error);
-        setLoading(false);
-      }
-    );
-    return () => unsub();
+    const subscriber = firestore()
+      .collection('items')
+      .orderBy('nome', 'asc')
+      .onSnapshot(
+        querySnapshot => {
+          const list = [];
+          querySnapshot.forEach(doc => {
+            list.push({
+              id: doc.id,
+              ...doc.data(),
+            });
+          });
+          setItems(list);
+          setLoading(false);
+        },
+        error => {
+          console.error(error);
+          Alert.alert("Erro", "Não foi possível carregar os itens.");
+          setLoading(false);
+        },
+      );
+
+    return () => subscriber();
   }, []);
 
-  useEffect(() => {
-    setFiltered(applyFilter(items, queryText, activeFilters, selectedSetor));
-  }, [queryText, items, activeFilters, selectedSetor]);
+  // Filtra os itens com base na busca
+  const filteredItems = useMemo(() => {
+    if (!searchQuery) {
+      return items;
+    }
+    return items.filter(
+      item =>
+        item.nome.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.patrimonio.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.setor.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [items, searchQuery]);
 
-  const applyFilter = (arr, q, estados, setor) => {
-    const s = (q || '').toLowerCase();
-    return arr.filter((it) => {
-      const fields = [
-        it.COD,
-        it.DESCRICAO,
-        it.LOCALIZACAO,
-        it.MARCA,
-        it.MODELO,
-        it.SETOR_RESPONSAVEL,
-        it.ESTADO,
-        it.NUMERO_SERIE,
-      ]
-        .filter(Boolean)
-        .map((v) => String(v).toLowerCase());
-      const matchesText = s ? fields.some((f) => f.includes(s)) : true;
-      const matchesEstado = estados && estados.length > 0 ? estados.map(String).includes(String(it.ESTADO)) : true;
-      const matchesSetor = setor ? String(it.SETOR_RESPONSAVEL) === String(setor) : true;
-      return matchesText && matchesEstado && matchesSetor;
-    });
-  };
-
-  const renderItem = ({ item, index }) => (
-    <Animated.View entering={FadeInUp.duration(200).delay(index * 40)}>
-      <TouchableOpacity onPress={() => navigation.navigate('DetalhesItem', { cod: item.COD, item })}>
-        <Card style={{ marginBottom: 12 }}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>{item.DESCRICAO || 'Sem descrição'}</Text>
-          <Text style={[styles.cardSubtitle, { color: colors.subtleText }]}>Nº Patrimônio: {item.COD || '-'}</Text>
-          <Text style={[styles.cardSubtitle, { color: colors.subtleText }]}>Localização: {item.LOCALIZACAO || '-'}</Text>
-        </Card>
-      </TouchableOpacity>
-    </Animated.View>
-  );
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ActivityIndicator
+          size="large"
+          color={COLORS.primary}
+          style={{ flex: 1 }}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header title="Itens Cadastrados" />
-      <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Feather name="search" size={18} color={colors.subtleText} />
+    <SafeAreaView style={styles.safeArea}>
+      {/* 1. Cabeçalho da Tela */}
+      <View style={styles.screenHeader}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Icon name="chevron-left" size={30} color={COLORS.primary} />
+        </TouchableOpacity>
+        <Text style={styles.screenTitle}>Itens</Text>
+        <View style={{ width: 30 }} /> 
+      </View>
+
+      {/* 2. Barra de Busca */}
+      <View style={styles.searchContainer}>
+        <Icon
+          name="search"
+          size={20}
+          color={COLORS.placeholder}
+          style={styles.searchIcon}
+        />
         <TextInput
-          style={[styles.searchInput, { color: colors.text }]}
-          value={queryText}
-          onChangeText={setQueryText}
-          placeholder="Buscar por descrição, patrimônio, etc..."
-          placeholderTextColor={colors.subtleText}
+          style={styles.searchInput}
+          placeholder="Buscar por nome, patrimônio, setor..."
+          placeholderTextColor={COLORS.placeholder}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
         />
       </View>
 
-      {/* Filtros */}
-      <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
-        <View style={{ alignItems: 'flex-end' }}>
-          <FilterTrigger active={activeFilters.length > 0 || !!selectedSetor} onPress={() => setFilterVisible(true)} />
-        </View>
-        {setorOptions.length > 0 && (
-          <View style={{ marginTop: 8 }}>
-            <Text style={[styles.cardSubtitle, { marginTop: 4, color: colors.subtleText }]}>Setor</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 }}>
-              {setorOptions.map((s) => {
-                const active = selectedSetor === s;
-                return (
-                  <View key={s} style={{ marginRight: 8, marginBottom: 8 }}>
-                    <OutlineButton title={s} icon="briefcase" active={active} onPress={() => setSelectedSetor(active ? null : s)} />
-                  </View>
-                );
-              })}
-            </View>
-          </View>
+      {/* 3. Lista de Itens */}
+      <FlatList
+        data={filteredItems}
+        keyExtractor={item => item.id}
+        renderItem={({ item }) => (
+          <ItemCard
+            item={item}
+            onPress={() => navigation.navigate('DetalhesItem', { itemId: item.id })}
+          />
         )}
-      </View>
-
-      {loading ? (
-        <View style={{ padding: 16 }}>
-          {[...Array(4)].map((_, idx) => (
-            <CardSkeleton key={idx} style={{ marginBottom: 12 }} />
-          ))}
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(it) => it.COD}
-          renderItem={renderItem}
-          contentContainerStyle={{ padding: 16 }}
-          ListEmptyComponent={() => (
-            <View style={{ alignItems: 'center', marginTop: 48 }}>
-              <Text style={[styles.emptyText, { color: colors.subtleText }]}>Nenhum item encontrado</Text>
-            </View>
-          )}
-        />
-      )}
-      {/* Modal de filtros */}
-      <FilterModal
-        visible={filterVisible}
-        options={estadoOptions}
-        activeFilters={activeFilters}
-        onToggle={(opt) => setActiveFilters((prev) => (prev.includes(opt) ? prev.filter((o) => o !== opt) : [...prev, opt]))}
-        onClear={() => setActiveFilters([])}
-        onApply={() => setFilterVisible(false)}
-        onClose={() => setFilterVisible(false)}
+        contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>Nenhum item encontrado.</Text>
+        }
       />
+
+      {/* 4. Botão Flutuante (FAB) para Adicionar Item */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate('CadastroItem')}>
+        <Icon name="plus" size={28} color={COLORS.white} />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  // Cabeçalho
+  screenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.base,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  screenTitle: {
+    ...FONTS.h3,
+    color: COLORS.text,
+  },
+  // Busca
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.lightGray,
+    borderRadius: SIZES.radius,
+    margin: SIZES.padding,
+    paddingHorizontal: SIZES.base * 2,
+  },
+  searchIcon: {
+    marginRight: SIZES.base,
+  },
+  searchInput: {
+    flex: 1,
+    ...FONTS.body3,
+    paddingVertical: SIZES.base * 1.5,
+    color: COLORS.text,
+  },
+  // Lista
+  listContainer: {
+    paddingHorizontal: SIZES.padding,
+    paddingBottom: 100, // Espaço para o FAB
+  },
+  emptyText: {
+    ...FONTS.body3,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: SIZES.padding * 2,
+  },
+  // Card
+  card: {
+    backgroundColor: COLORS.card,
+    borderRadius: SIZES.radius,
+    padding: SIZES.base * 2,
+    marginBottom: SIZES.base * 2,
+    // Sombra
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardTextContainer: {
+    marginBottom: SIZES.base * 2,
+  },
+  cardTitle: {
+    ...FONTS.h3,
+    color: COLORS.text,
+    marginBottom: SIZES.base,
+  },
+  cardInfo: {
+    ...FONTS.body4,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+  },
+  cardButton: {
+    backgroundColor: COLORS.lightGray,
+    borderRadius: SIZES.radius,
+    paddingVertical: SIZES.base,
+    alignItems: 'center',
+  },
+  cardButtonText: {
+    ...FONTS.h4,
+    color: COLORS.primary,
+    fontSize: 14,
+  },
+  // FAB
+  fab: {
+    position: 'absolute',
+    bottom: SIZES.padding,
+    right: SIZES.padding,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // Sombra
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+});
 
 export default ItensScreen;

@@ -1,152 +1,182 @@
-import React, { useState } from 'react';
-import { Alert, Image, SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import Header from '../components/Header';
-import Card from '../components/Card';
+import firestore from '@react-native-firebase/firestore';
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Icon from 'react-native-vector-icons/Feather';
 import PrimaryButton from '../components/PrimaryButton';
-import OutlineButton from '../components/OutlineButton';
-import Dropdown from '../components/Dropdown';
-import { styles } from '../theme';
-import Toast from 'react-native-toast-message';
-import * as ImagePicker from 'expo-image-picker';
-import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { useThemeColor } from '../constants/theme';
-import * as Haptics from 'expo-haptics';
-import { z } from 'zod';
+import { COLORS, FONTS, SIZES } from '../theme';
 
-const CadastroItemScreen = ({ route, navigation }) => {
-  const colors = useThemeColor();
-  const cod = route.params?.cod || '';
-  const [form, setForm] = useState({
-    DESCRICAO: '',
-    MARCA: '',
-    MODELO: '',
-    NUMERO_SERIE: '',
-    ESTADO: 'Novo',
-    LOCALIZACAO: '',
-    SETOR_RESPONSAVEL: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [imageBase64, setImageBase64] = useState(null);
-  const [imagePreviewUri, setImagePreviewUri] = useState(null);
+const CadastroItemScreen = ({ navigation, route }) => {
+  // Opcionalmente, podemos receber um patrimônio via QR Code
+  const patrimonioInicial = route.params?.patrimonio || '';
 
-  const setField = (k, v) => setForm((prev) => ({ ...prev, [k]: v }));
+  const [nome, setNome] = useState('');
+  const [patrimonio, setPatrimonio] = useState(patrimonioInicial);
+  const [setor, setSetor] = useState('');
+  const [descricao, setDescricao] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const pickImage = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-      base64: true,
-      allowsEditing: true,
-    });
-    if (!res.canceled) {
-      const asset = res.assets[0];
-      setImageBase64(asset.base64 || null);
-      setImagePreviewUri(asset.uri || null);
-    }
-  };
-
-  const itemSchema = z.object({
-    DESCRICAO: z.string().min(1, 'DESCRIÇÃO é obrigatória'),
-    LOCALIZACAO: z.string().min(1, 'LOCALIZAÇÃO é obrigatória'),
-    ESTADO: z.enum(['Novo', 'Em uso', 'Em manutenção', 'Danificado']),
-    MARCA: z.string().optional(),
-    MODELO: z.string().optional(),
-    NUMERO_SERIE: z.string().optional(),
-    SETOR_RESPONSAVEL: z.string().optional(),
-  });
-  const saveItem = async () => {
-    if (!cod) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert('Erro', 'Código do patrimônio ausente. Escaneie ou informe o código.');
+  const handleSave = async () => {
+    if (!nome || !patrimonio || !setor) {
+      Alert.alert('Erro', 'Por favor, preencha Nome, Patrimônio e Setor.');
       return;
     }
-    const parsed = itemSchema.safeParse(form);
-    if (!parsed.success) {
-      const msg = parsed.error.errors.map((e) => e.message).join('\n');
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert('Validação de dados', msg);
-      return;
-    }
+    setLoading(true);
     try {
-      setSaving(true);
-      let imageUrl;
-      if (imageBase64) {
-        const storage = getStorage();
-        const storageRef = ref(storage, `patrimonio_images/${cod}.jpg`);
-        await uploadString(storageRef, `data:image/jpeg;base64,${imageBase64}`, 'data_url');
-        imageUrl = await getDownloadURL(storageRef);
-      }
-      const data = parsed.data;
-      await setDoc(doc(db, 'patrimonio', cod), { ...data, ...(imageUrl ? { imageUrl } : {}) });
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      Toast.show({ type: 'success', text1: 'Item salvo com sucesso!' });
-      navigation.replace('DetalhesItem', { cod, item: { COD: cod, ...data, ...(imageUrl ? { imageUrl } : {}) } });
-    } catch (err) {
-      Alert.alert('Erro ao salvar', err.message);
-    } finally {
-      setSaving(false);
+      await firestore().collection('items').add({
+        nome,
+        patrimonio,
+        setor,
+        descricao,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+      });
+      Alert.alert('Sucesso', 'Item cadastrado com sucesso!');
+      navigation.goBack();
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Erro', 'Não foi possível cadastrar o item.');
+      setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header 
-        title="Cadastro de Item"
-        left={
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4 }}>
-            <Feather name="arrow-left" size={24} color={colors.primary} />
-          </TouchableOpacity>
-        }
-      />
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Card>
-          <Text style={[styles.label, { color: colors.subtleText }]}>Nº Patrimônio (QR)</Text>
-          <TextInput style={[styles.input, { backgroundColor: colors.card, color: colors.subtleText, borderColor: colors.border }]} value={cod} editable={false} />
+    <SafeAreaView style={styles.safeArea}>
+      {/* 1. Cabeçalho da Tela */}
+      <View style={styles.screenHeader}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Icon name="chevron-left" size={30} color={COLORS.primary} />
+        </TouchableOpacity>
+        <Text style={styles.screenTitle}>Cadastrar Item</Text>
+        <View style={{ width: 30 }} />
+      </View>
 
-          <Text style={[styles.label, { color: colors.subtleText }]}>DESCRIÇÃO</Text>
-          <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]} value={form.DESCRICAO} onChangeText={(t) => setField('DESCRICAO', t)} placeholderTextColor={colors.subtleText} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}>
+        <ScrollView style={styles.container}>
+          {/* Campo Nome */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Nome do Item</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ex: Cadeira de escritório"
+              placeholderTextColor={COLORS.placeholder}
+              value={nome}
+              onChangeText={setNome}
+            />
+          </View>
 
-          <Text style={[styles.label, { color: colors.subtleText }]}>MARCA</Text>
-          <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]} value={form.MARCA} onChangeText={(t) => setField('MARCA', t)} placeholderTextColor={colors.subtleText} />
+          {/* Campo Patrimônio */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Patrimônio (ID)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ex: 123456"
+              placeholderTextColor={COLORS.placeholder}
+              value={patrimonio}
+              onChangeText={setPatrimonio}
+              keyboardType="number-pad"
+            />
+          </View>
 
-          <Text style={[styles.label, { color: colors.subtleText }]}>MODELO</Text>
-          <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]} value={form.MODELO} onChangeText={(t) => setField('MODELO', t)} placeholderTextColor={colors.subtleText} />
+          {/* Campo Setor */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Setor</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ex: TI, Administração"
+              placeholderTextColor={COLORS.placeholder}
+              value={setor}
+              onChangeText={setSetor}
+            />
+          </View>
 
-          <Text style={[styles.label, { color: colors.subtleText }]}>N°/N° SÉRIE</Text>
-          <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]} value={form.NUMERO_SERIE} onChangeText={(t) => setField('NUMERO_SERIE', t)} placeholderTextColor={colors.subtleText} />
+          {/* Campo Descrição */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Descrição (Opcional)</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Detalhes sobre o item..."
+              placeholderTextColor={COLORS.placeholder}
+              value={descricao}
+              onChangeText={setDescricao}
+              multiline
+              numberOfLines={4}
+            />
+          </View>
 
-          <Text style={[styles.label, { color: colors.subtleText }]}>ESTADO</Text>
-          <Dropdown
-            value={form.ESTADO}
-            onChange={(v) => setField('ESTADO', v)}
-            options={['Novo', 'Em uso', 'Em manutenção', 'Danificado']}
+          <PrimaryButton
+            title={loading ? <ActivityIndicator color={COLORS.white} /> : 'Salvar Item'}
+            onPress={handleSave}
+            disabled={loading}
+            style={{ marginTop: SIZES.padding }}
           />
-
-          <Text style={[styles.label, { color: colors.subtleText }]}>LOCALIZAÇÃO</Text>
-          <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]} value={form.LOCALIZACAO} onChangeText={(t) => setField('LOCALIZACAO', t)} placeholderTextColor={colors.subtleText} />
-
-          <Text style={[styles.label, { color: colors.subtleText }]}>SETOR RESPONSÁVEL</Text>
-          <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]} value={form.SETOR_RESPONSAVEL} onChangeText={(t) => setField('SETOR_RESPONSAVEL', t)} placeholderTextColor={colors.subtleText} />
-
-          {imagePreviewUri && (
-            <>
-              <Text style={[styles.label, { color: colors.subtleText }]}>Foto selecionada</Text>
-              <Image source={{ uri: imagePreviewUri }} style={{ width: '100%', height: 200, borderRadius: 12, marginBottom: 12 }} />
-            </>
-          )}
-
-          <TouchableOpacity onPress={pickImage} style={{ marginBottom: 12 }}>
-            <OutlineButton title="Adicionar/Alterar Foto" icon="image" />
-          </TouchableOpacity>
-
-          <PrimaryButton title={saving ? 'Salvando...' : 'Salvar Item'} icon="save" onPress={saveItem} disabled={saving || !cod} />
-        </Card>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  // Cabeçalho
+  screenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.base,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  screenTitle: {
+    ...FONTS.h3,
+    color: COLORS.text,
+  },
+  // Formulário
+  container: {
+    flex: 1,
+    padding: SIZES.padding,
+  },
+  inputContainer: {
+    width: '100%',
+    marginBottom: SIZES.base * 2.5,
+  },
+  label: {
+    ...FONTS.body4,
+    color: COLORS.textSecondary,
+    marginBottom: SIZES.base,
+    marginLeft: SIZES.base,
+  },
+  input: {
+    backgroundColor: COLORS.lightGray,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: SIZES.radius,
+    paddingVertical: SIZES.base * 1.5,
+    paddingHorizontal: SIZES.base * 2,
+    ...FONTS.body3,
+    color: COLORS.text,
+  },
+  textArea: {
+    height: 120,
+    textAlignVertical: 'top', // Para Android
+    paddingTop: SIZES.base * 1.5, // Para iOS
+  },
+});
 
 export default CadastroItemScreen;

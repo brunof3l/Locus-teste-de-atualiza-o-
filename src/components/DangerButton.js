@@ -1,24 +1,37 @@
-import React from 'react';
-import { TouchableOpacity, Text } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { styles } from '../theme';
-import { useThemeColor } from '../constants/theme';
+import { StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { COLORS, FONTS, SIZES } from '../theme';
 
-const DangerButton = ({ title, icon, onPress, style }) => {
-  const colors = useThemeColor();
+const DangerButton = ({ title, onPress, disabled, style }) => {
   return (
     <TouchableOpacity
-      onPress={onPress}
       style={[
-        styles.dangerButton,
-        { backgroundColor: colors.card, borderColor: colors.error, borderWidth: 1.5 },
+        styles.button,
+        disabled && styles.disabled,
         style,
       ]}
-    >
-      {icon && <Feather name={icon} size={16} color={colors.error} style={{ marginRight: 6 }} />}
-      <Text style={[styles.dangerButtonText, { color: colors.error }]}>{title}</Text>
+      onPress={onPress}
+      disabled={disabled}>
+      <Text style={styles.text}>{title}</Text>
     </TouchableOpacity>
   );
 };
+
+const styles = StyleSheet.create({
+  button: {
+    backgroundColor: COLORS.danger, // Cor principal é a de perigo
+    width: '100%',
+    padding: SIZES.base * 2,
+    borderRadius: SIZES.radius,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  text: {
+    ...FONTS.h4,
+    color: COLORS.white,
+  },
+  disabled: {
+    backgroundColor: COLORS.placeholder,
+  },
+});
 
 export default DangerButton;

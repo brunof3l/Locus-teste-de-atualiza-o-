@@ -1,18 +1,36 @@
 pluginManagement {
-  repositories {
-    google()
-    mavenCentral()
-    gradlePluginPortal()
-  }
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
 }
 
 dependencyResolutionManagement {
-  repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-  repositories {
-    google()
-    mavenCentral()
-  }
+    // Esta linha é a que causa o erro, mas ela está correta!
+    // Ela força os repositórios a serem definidos aqui.
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS) 
+
+    repositories {
+        google()
+        mavenCentral()
+
+        //
+        // ADICIONAMOS OS REPOSITÓRIOS DO REACT NATIVE E EXPO AQUI
+        //
+        maven {
+            // Repositório do React Native
+            url(new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim(), "../android"))
+        }
+        maven {
+            // Repositório do Expo
+            url(new File(["node", "--print", "require.resolve('expo/package.json')"].execute(null, rootDir).text.trim(), "../android"))
+        }
+    }
 }
 
 rootProject.name = 'Locus'
 include ':app'
+
+// Esta parte aplica a configuração do React Native
+apply from: new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim(), "../android/react.gradle")

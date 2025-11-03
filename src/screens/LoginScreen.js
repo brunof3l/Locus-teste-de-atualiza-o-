@@ -1,93 +1,150 @@
-import { Feather } from '@expo/vector-icons'; // Importar ícones Feather
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, SafeAreaView, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Card from '../components/Card';
-import LocusLogo from '../components/LocusLogo';
-import PrimaryButton from '../components/PrimaryButton';
-import { useThemeColor } from '../constants/theme';
-import { useAuth } from '../context/AuthContext';
-import { auth } from '../firebase/config';
-import { styles } from '../theme';
+import { useContext, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import LocusLogo from '../components/LocusLogo'; // Supondo que seu logo está em componentes
+import PrimaryButton from '../components/PrimaryButton'; // Usaremos um botão primário padronizado
+import { AuthContext } from '../context/AuthContext';
+import { COLORS, FONTS, SIZES } from '../theme';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // NOVO estado para visibilidade da senha
-  const colors = useThemeColor();
-  const { loading: authLoading } = useAuth();
-  const [loginLoading, setLoginLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { login } = useContext(AuthContext);
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Atenção', 'Preencha e-mail e senha.');
+      Alert.alert('Erro', 'Por favor, preencha todos os campos.');
       return;
     }
+    setLoading(true);
     try {
-      setLoginLoading(true);
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-    } catch (err) {
-      Alert.alert('Erro no Login', err.message);
-    } finally {
-      setLoginLoading(false);
+      await login(email, password);
+      // A navegação será tratada pelo AuthContext
+    } catch (error) {
+      Alert.alert('Erro no Login', 'E-mail ou senha inválidos.');
+      console.log(error);
     }
+    setLoading(false);
   };
 
-  if (authLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <LocusLogo style={{ marginVertical: 40 }} />
-      <Text style={styles.authTitle}>Entrar</Text>
-      <Text style={styles.authSubtitle}>Use suas credenciais para acessar</Text>
-      <Card style={{ marginHorizontal: 24 }}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Digite seu e-mail..."
-          placeholderTextColor={colors.subtleText}
-        />
-        <Text style={styles.label}>Senha</Text>
-        {/* Input de Senha com Ícone de Visibilidade */}
-        <View style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', paddingRight: 10 }]}>
-          <TextInput
-            style={{ flex: 1, color: colors.text, paddingVertical: 0 }} // Ajustar paddingVertical para não ter padding extra
-            secureTextEntry={!showPassword} // Controlar visibilidade
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Digite sua senha..."
-            placeholderTextColor={colors.subtleText}
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}>
+        <View style={styles.innerContainer}>
+          <LocusLogo style={styles.logo} />
+
+          <Text style={styles.title}>Login</Text>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>E-mail</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="seuemail@exemplo.com"
+              placeholderTextColor={COLORS.placeholder}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Senha</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Sua senha"
+              placeholderTextColor={COLORS.placeholder}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          </View>
+
+          <PrimaryButton
+            title={loading ? <ActivityIndicator color={COLORS.white} /> : "Login"}
+            onPress={handleLogin}
+            disabled={loading}
           />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 5 }}>
-            <Feather name={showPassword ? 'eye' : 'eye-off'} size={20} color={colors.subtleText} />
+
+          <TouchableOpacity
+            style={styles.signupButton}
+            onPress={() => navigation.navigate('Signup')}>
+            <Text style={styles.signupText}>
+              Não tem uma conta? <Text style={styles.signupLink}>Cadastre-se</Text>
+            </Text>
           </TouchableOpacity>
         </View>
-
-        <PrimaryButton title={loginLoading ? 'Entrando...' : 'Entrar'} icon="log-in" onPress={handleLogin} disabled={loginLoading} />
-
-        <Pressable
-           hitSlop={12}
-           style={{ marginTop: 20, alignItems: 'center' }}
-           onPress={() => navigation.push('Signup')}
-        >
-           <Text style={[styles.linkText, { color: colors.subtleText }]}>
-             Não tem conta? <Text style={{ fontWeight: 'bold', color: colors.primary }}>Cadastre-se</Text>
-           </Text>
-        </Pressable>
-
-      </Card>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  innerContainer: {
+    paddingHorizontal: SIZES.padding,
+    alignItems: 'center',
+  },
+  logo: {
+    marginBottom: SIZES.padding * 2,
+    // Ajuste o tamanho do seu logo aqui se necessário
+  },
+  title: {
+    ...FONTS.h2,
+    color: COLORS.text,
+    marginBottom: SIZES.padding,
+  },
+  inputContainer: {
+    width: '100%',
+    marginBottom: SIZES.base * 2,
+  },
+  label: {
+    ...FONTS.body4,
+    color: COLORS.textSecondary,
+    marginBottom: SIZES.base,
+    marginLeft: SIZES.base,
+  },
+  input: {
+    backgroundColor: COLORS.lightGray,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: SIZES.radius,
+    paddingVertical: SIZES.base * 1.5,
+    paddingHorizontal: SIZES.base * 2,
+    ...FONTS.body3,
+    color: COLORS.text,
+  },
+  signupButton: {
+    marginTop: SIZES.padding,
+  },
+  signupText: {
+    ...FONTS.body4,
+    color: COLORS.textSecondary,
+  },
+  signupLink: {
+    color: COLORS.primary,
+    fontFamily: 'Roboto-Bold',
+  },
+});
 
 export default LoginScreen;

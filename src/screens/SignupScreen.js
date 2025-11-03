@@ -1,67 +1,162 @@
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { useState } from 'react';
-import { Alert, SafeAreaView, Text, TextInput, TouchableOpacity } from 'react-native';
-import Card from '../components/Card';
+import { useContext, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import LocusLogo from '../components/LocusLogo';
 import PrimaryButton from '../components/PrimaryButton';
-import { useThemeColor } from '../constants/theme';
-import { auth } from '../firebase/config';
-import { styles } from '../theme';
+import { AuthContext } from '../context/AuthContext';
+import { COLORS, FONTS, SIZES } from '../theme';
 
 const SignupScreen = ({ navigation }) => {
-  const [usuario, setUsuario] = useState('');
+  const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
-  const colors = useThemeColor();
+  const { signup } = useContext(AuthContext);
 
   const handleSignup = async () => {
-    if (password !== confirm) {
-      Alert.alert('Atenção', 'As senhas não coincidem.');
+    if (!nome || !email || !password) {
+      Alert.alert('Erro', 'Por favor, preencha todos os campos.');
       return;
     }
+    setLoading(true);
     try {
-      setLoading(true);
-      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      await updateProfile(cred.user, { displayName: usuario.trim() || undefined });
-      Alert.alert('Sucesso', 'Usuário cadastrado! Você já pode entrar.');
-      navigation.goBack();
-    } catch (err) {
-      Alert.alert('Erro ao cadastrar', err.message);
-    } finally {
-      setLoading(false);
+      await signup(email, password, nome);
+      // A navegação será tratada pelo AuthContext
+    } catch (error) {
+      Alert.alert('Erro no Cadastro', 'Não foi possível criar a conta.');
+      console.log(error);
     }
+    setLoading(false);
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={styles.authTitle}>Criar Conta</Text>
-      <Text style={styles.authSubtitle}>Preencha os dados para começar</Text>
-      <Card style={{ marginHorizontal: 24 }}>
-        <Text style={styles.label}>Usuário</Text>
-        <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]} value={usuario} onChangeText={setUsuario} placeholder="Seu nome" placeholderTextColor={colors.subtleText} />
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}>
+        <View style={styles.innerContainer}>
+          <LocusLogo style={styles.logo} />
 
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Digite seu e-mail..."
-          placeholderTextColor={colors.subtleText}
-        />
-        <Text style={styles.label}>Senha</Text>
-        <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]} secureTextEntry value={password} onChangeText={setPassword} placeholder="Mínimo 6 caracteres" placeholderTextColor={colors.subtleText} />
-        <Text style={styles.label}>Confirmar Senha</Text>
-        <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]} secureTextEntry value={confirm} onChangeText={setConfirm} placeholder="Repita a senha" placeholderTextColor={colors.subtleText} />
-        <PrimaryButton title={loading ? 'Cadastrando...' : 'Cadastrar'} icon="user-check" onPress={handleSignup} disabled={loading} />
-        <TouchableOpacity style={{ marginTop: 20 }} onPress={() => navigation.goBack()}>
-          <Text style={styles.linkText}>Já tem uma conta? <Text style={{ fontWeight: 'bold' }}>Entrar</Text></Text>
-        </TouchableOpacity>
-      </Card>
+          <Text style={styles.title}>Cadastro</Text>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Nome</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Seu nome completo"
+              placeholderTextColor={COLORS.placeholder}
+              value={nome}
+              onChangeText={setNome}
+              autoCapitalize="words"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>E-mail</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="seuemail@exemplo.com"
+              placeholderTextColor={COLORS.placeholder}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Senha</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Crie uma senha forte"
+              placeholderTextColor={COLORS.placeholder}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          </View>
+
+          <PrimaryButton
+            title={loading ? <ActivityIndicator color={COLORS.white} /> : "Cadastrar"}
+            onPress={handleSignup}
+            disabled={loading}
+          />
+
+          <TouchableOpacity
+            style={styles.loginButton}
+            onPress={() => navigation.navigate('Login')}>
+            <Text style={styles.loginText}>
+              Já possui conta? <Text style={styles.loginLink}>Login</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  innerContainer: {
+    paddingHorizontal: SIZES.padding,
+    alignItems: 'center',
+  },
+  logo: {
+    marginBottom: SIZES.padding,
+  },
+  title: {
+    ...FONTS.h2,
+    color: COLORS.text,
+    marginBottom: SIZES.padding,
+  },
+  inputContainer: {
+    width: '100%',
+    marginBottom: SIZES.base * 2,
+  },
+  label: {
+    ...FONTS.body4,
+    color: COLORS.textSecondary,
+    marginBottom: SIZES.base,
+    marginLeft: SIZES.base,
+  },
+  input: {
+    backgroundColor: COLORS.lightGray,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: SIZES.radius,
+    paddingVertical: SIZES.base * 1.5,
+    paddingHorizontal: SIZES.base * 2,
+    ...FONTS.body3,
+    color: COLORS.text,
+  },
+  loginButton: {
+    marginTop: SIZES.padding,
+  },
+  loginText: {
+    ...FONTS.body4,
+    color: COLORS.textSecondary,
+  },
+  loginLink: {
+    color: COLORS.primary,
+    fontFamily: 'Roboto-Bold',
+  },
+});
 
 export default SignupScreen;

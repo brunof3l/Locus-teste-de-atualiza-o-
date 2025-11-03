@@ -1,23 +1,29 @@
-// Top-level Gradle build file for native Kotlin/Compose Android app.
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+// Define as variáveis globais que o React Native precisa
+ext {
+    buildToolsVersion = "34.0.0"
+    minSdkVersion = 23
+    compileSdkVersion = 34
+    targetSdkVersion = 34
+    ndkVersion = "25.1.8937393"
+    kotlinVersion = "1.8.10" // Verifique se esta é a versão correta para seu projeto
+}
 
 buildscript {
     ext {
-        compose_ui_version = '1.6.8'
-        kotlinVersion = '1.9.24'
-        compileSdkVersion = 34
-        targetSdkVersion = 34
-        minSdkVersion = 24
+        kotlinVersion = "1.8.10" // Defina a versão do Kotlin aqui também
     }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath "com.android.tools.build:gradle:8.7.0"
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${kotlinVersion}"
-        classpath "com.google.gms:google-services:4.4.2"
+        classpath "com.android.tools.build:gradle:8.1.1" // Verifique a versão do plugin do Gradle
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
+        // Adiciona o plugin do Google Services (Firebase)
+        classpath 'com.google.gms:google-services:4.4.0' // Use a versão que seu projeto precisa
     }
 }
 
-// Clean task for convenience
-task clean(type: Delete) { delete rootProject.buildDir }
+// O bloco "allprojects" foi removido daqui para corrigir o erro.

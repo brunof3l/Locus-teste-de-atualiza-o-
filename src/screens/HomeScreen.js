@@ -1,132 +1,170 @@
-import { Feather } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
-import { Alert, SafeAreaView, ScrollView, Text, TouchableOpacity } from 'react-native';
-import * as XLSX from 'xlsx';
-import Card from '../components/Card';
-import Header from '../components/Header';
-import PrimaryButton from '../components/PrimaryButton';
-import { useThemeColor } from '../constants/theme';
-import { useAuth } from '../context/AuthContext';
-import { auth, db } from '../firebase/config';
-import { signOut } from 'firebase/auth';
-import { styles } from '../theme';
+import firestore from '@react-native-firebase/firestore';
+import { useContext, useEffect, useState } from 'react';
+import {
+  Alert,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import Icon from 'react-native-vector-icons/Feather'; // Usando Feather Icons (instale se não tiver)
+import LocusLogo from '../components/LocusLogo'; // Reutilizando seu logo
+import { AuthContext } from '../context/AuthContext';
+import { COLORS, FONTS, SIZES } from '../theme';
 
-// Importações específicas do Firestore para a função de exportar
-// (Garantindo que 'query' e 'getDocs' estejam corretos)
-
+// Você precisará instalar: npm install react-native-vector-icons
+// e seguir as instruções de instalação nativa (principalmente no Android/app/build.gradle)
 
 const HomeScreen = ({ navigation }) => {
-  const { user, role } = useAuth();
-  const colors = useThemeColor();
-  const [totalCount, setTotalCount] = useState(0);
+  const { user, logout } = useContext(AuthContext);
+  const [itemCount, setItemCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
-  const isAdmin = role === 'admin';
-  const [exporting, setExporting] = useState(false);
-
+  // Efeito para buscar o *contador* de itens
   useEffect(() => {
-    const q = collection(db, 'patrimonio');
-    const unsub = onSnapshot(
-      q,
-      (snap) => setTotalCount(snap.size),
-      (error) => {
-        console.error('onSnapshot(patrimonio) error:', error);
-        Alert.alert('Erro ao carregar dados', 'Não foi possível obter o total de itens em tempo real.');
-        setTotalCount(0);
-      },
-    );
-    return () => unsub();
+    const subscriber = firestore()
+      .collection('items')
+      .onSnapshot(
+        querySnapshot => {
+          setItemCount(querySnapshot.size); // Apenas contamos os documentos
+          setLoading(false);
+        },
+        error => {
+          console.error(error);
+          Alert.alert("Erro", "Não foi possível carregar o número de itens.");
+          setLoading(false);
+        },
+      );
+
+    // Encerra o listener ao desmontar
+    return () => subscriber();
   }, []);
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await logout();
     } catch (error) {
-      Alert.alert('Erro ao Sair', error.message);
+      console.error(error);
+      Alert.alert("Erro", "Não foi possível fazer logout.");
     }
   };
 
-  const exportData = async () => {
-    setExporting(true);
-    try {
-      const q = query(collection(db, 'patrimonio'));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map((doc) => ({
-        COD: doc.id,
-        ...doc.data(),
-      }));
-
-      if (data.length === 0) {
-        Alert.alert('Exportação', 'Não há itens para exportar.');
-        setExporting(false);
-        return;
-      }
-
-      const worksheet = XLSX.utils.json_to_sheet(data);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Patrimonio');
-
-      const wbout = XLSX.write(workbook, { type: 'base64', bookType: 'xlsx' });
-      const uri = FileSystem.cacheDirectory + 'patrimonio.xlsx';
-
-      await FileSystem.writeAsStringAsync(uri, wbout, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      if (!(await Sharing.isAvailableAsync())) {
-        Alert.alert('Erro', 'O compartilhamento não está disponível neste dispositivo.');
-        setExporting(false);
-        return;
-      }
-
-      await Sharing.shareAsync(uri);
-    } catch (error) {
-      console.error('Erro ao exportar dados:', error);
-      Alert.alert('Erro na Exportação', 'Ocorreu um erro ao gerar ou compartilhar o arquivo Excel.');
-    } finally {
-      setExporting(false);
-    }
-  };
+  // Pega o primeiro nome do usuário
+  const userName = user?.displayName ? user.displayName.split(' ')[0] : 'Usuário';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header
-        title="Início"
-        right={
-          <TouchableOpacity onPress={handleLogout} style={{ padding: 4 }}>
-            <Feather name="log-out" size={24} color={colors.error} />
-          </TouchableOpacity>
-        }
-      />
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Card style={{ marginBottom: 20 }}>
-          <Text style={[styles.welcomeText, { color: colors.text }]}>Bem-vindo,</Text>
-          <Text style={[styles.welcomeText, { color: colors.text, fontWeight: 'bold', fontSize: 24 }]}>
-            {user?.displayName || 'Usuário'}!
+    <SafeAreaView style={styles.safeArea}>
+      {/* 1. Cabeçalho */}
+      <View style={styles.header}>
+        <LocusLogo height={30} /> 
+        <TouchableOpacity onPress={handleLogout}>
+          <Icon name="log-out" size={24} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.container}>
+        {/* 2. Saudação */}
+        <Text style={styles.greeting}>Olá, {userName}</Text>
+
+        {/* 3. Botões de Ação */}
+        <TouchableOpacity
+          style={[styles.actionCard, { backgroundColor: COLORS.primary }]}
+          onPress={() => navigation.navigate('Scanner')}>
+          <Icon name="maximize" size={28} color={COLORS.white} style={styles.cardIcon} />
+          <Text style={styles.actionCardText}>Escanear QR Code</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionCard, { backgroundColor: COLORS.lightGray }]}
+          onPress={() => navigation.navigate('Itens')}>
+          <Icon name="list" size={28} color={COLORS.text} style={styles.cardIcon} />
+          <Text style={[styles.actionCardText, { color: COLORS.text }]}>
+            Ver Itens
           </Text>
-        </Card>
+        </TouchableOpacity>
 
-        <PrimaryButton icon="camera" title="Escanear Novo Patrimônio" onPress={() => navigation.navigate('Scanner')} />
-
-        {isAdmin && (
-          <PrimaryButton
-            icon="download"
-            title={exporting ? 'Exportando...' : 'Exportar Dados para Excel'}
-            onPress={exportData}
-            disabled={exporting}
-            style={{ backgroundColor: exporting ? colors.card : colors.success }}
-          />
-        )}
-
-        <Card style={{ marginTop: 20 }}>
-          <Text style={[styles.infoText, { color: colors.subtleText }]}>Total de Itens Cadastrados:</Text>
-          <Text style={[styles.countText, { color: colors.primary }]}>{totalCount}</Text>
-        </Card>
-      </ScrollView>
+        {/* 4. Card do Contador */}
+        <View style={styles.countCard}>
+          <Text style={styles.countLabel}>Itens Cadastrados</Text>
+          {loading ? (
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          ) : (
+            <Text style={styles.countNumber}>{itemCount}</Text>
+          )}
+        </View>
+      </View>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SIZES.padding,
+    paddingVertical: SIZES.base * 2,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  container: {
+    flex: 1,
+    padding: SIZES.padding,
+  },
+  greeting: {
+    ...FONTS.h2,
+    color: COLORS.text,
+    marginBottom: SIZES.padding,
+  },
+  actionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SIZES.padding,
+    borderRadius: SIZES.radius,
+    marginBottom: SIZES.base * 2,
+    // Sombra para elevação
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardIcon: {
+    marginRight: SIZES.base * 2,
+  },
+  actionCardText: {
+    ...FONTS.h3,
+    color: COLORS.white,
+  },
+  countCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: SIZES.radius,
+    padding: SIZES.padding,
+    alignItems: 'center',
+    marginTop: SIZES.base * 2,
+    // Sombra
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  countLabel: {
+    ...FONTS.h3,
+    color: COLORS.textSecondary,
+    marginBottom: SIZES.base,
+  },
+  countNumber: {
+    ...FONTS.h1,
+    fontSize: 48,
+    color: COLORS.primary,
+    fontFamily: 'Roboto-Bold',
+  },
+});
 
 export default HomeScreen;
